@@ -478,30 +478,99 @@ const NotificationCenter = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const InsightModal = ({ onClose }: { onClose: () => void }) => (
-  <motion.div 
-    initial={{ opacity: 0, scale: 0.9 }}
-    animate={{ opacity: 1, scale: 1 }}
-    exit={{ opacity: 0, scale: 0.9 }}
-    className="fixed inset-0 z-[130] bg-background p-6 pt-24 overflow-y-auto"
-  >
-    <button onClick={onClose} className="absolute top-6 right-6 p-2 glass-card rounded-full"><Plus className="rotate-45" /></button>
-    <div className="space-y-6">
-      <SanctuaryImage 
-        src="https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=800&fm=webp" 
-        alt="Ovulatory Glow"
-        className="w-full h-64 rounded-3xl" 
-      />
-      <div className="space-y-4">
-        <h2 className="text-3xl text-primary serif-italic">Harnessing Your Ovulatory Glow</h2>
-        <div className="prose prose-pink opacity-80 text-sm leading-relaxed space-y-4">
-          <p>During ovulation, your estrogen and testosterone levels are at their natural peak. This biological high often translates to increased confidence, social energy, and physical endurance.</p>
-          <p>This is the optimal time for complex problem-solving, high-intensity workouts, and meaningful social connections. Your body is primed for action—listen to its call for movement!</p>
+const InsightModal = ({ onClose, user, cycleParams, loggedSymptoms }: { onClose: () => void; user: any; cycleParams: any; loggedSymptoms: string[] }) => {
+  const [insight, setInsight] = useState<{ title: string; content: string; tags: string[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchInsight = async () => {
+      try {
+        const lastDate = new Date(user.lastPeriodDate);
+        const today = new Date();
+        const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const currentPhase = PHASES.get(diffDays, cycleParams).label;
+
+        const response = await fetch('/api/insights', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user, cycleParams, loggedSymptoms, currentPhase })
+        });
+        const data = await response.json();
+        setInsight(data);
+      } catch (error) {
+        console.error("Failed to fetch AI insights:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInsight();
+  }, [user.lastPeriodDate, JSON.stringify(cycleParams), JSON.stringify(loggedSymptoms)]);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      className="fixed inset-0 z-[130] bg-background p-6 pt-24 overflow-y-auto"
+    >
+      <button onClick={onClose} className="absolute top-6 right-6 p-2 glass-card rounded-full z-10"><Plus className="rotate-45" /></button>
+      
+      {loading ? (
+        <div className="flex flex-col items-center justify-center h-full space-y-4">
+          <motion.div 
+            animate={{ rotate: 360 }}
+            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+            className="text-primary/20"
+          >
+            <Sparkles size={48} strokeWidth={1} />
+          </motion.div>
+          <p className="text-sm font-serif italic text-primary/60">Reading your sacred rhythm...</p>
         </div>
-      </div>
-    </div>
-  </motion.div>
-);
+      ) : insight ? (
+        <div className="space-y-8 pb-12">
+          <div className="relative h-72 rounded-[32px] overflow-hidden group">
+            <SanctuaryImage 
+              src="https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=800&fm=webp" 
+              alt="Insight Visual"
+              className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+            <div className="absolute bottom-6 left-6 right-6">
+              <div className="flex gap-2 mb-3">
+                {insight.tags?.map(tag => (
+                  <span key={tag} className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-[9px] font-bold uppercase tracking-widest text-white border border-white/10">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+              <h2 className="text-3xl text-white serif-italic leading-tight">{insight.title}</h2>
+            </div>
+          </div>
+
+          <div className="space-y-6 px-2">
+            <div className="prose prose-pink opacity-80 text-md leading-relaxed font-serif italic whitespace-pre-wrap">
+              {insight.content}
+            </div>
+            
+            <div className="p-6 rounded-[2rem] bg-primary/5 border border-primary/10">
+              <p className="text-[11px] text-center leading-relaxed text-primary/60 italic">
+                AI insights are generated based on your biological flow to provide holistic guidance. Always trust your intuition and consult experts for medical needs.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+          <p className="text-xl serif-italic text-primary">The Sanctuary is quiet.</p>
+          <p className="text-sm opacity-60">Unable to generate insight at this moment.</p>
+          <button onClick={onClose} className="px-8 py-3 rounded-full bg-primary/10 text-primary font-bold uppercase tracking-widest text-xs">Return</button>
+        </div>
+      )}
+    </motion.div>
+  );
+};
 
 const HistoryModal = ({ onClose, cycleParams }: { onClose: () => void; cycleParams: { cycleLength: number; periodLength: number } }) => (
   <motion.div 
@@ -914,8 +983,37 @@ const LogView = ({ symptoms, setSymptoms, cycleParams }: { symptoms: string[]; s
   );
 };
 
-const InsightsView = ({ avgCycle = 28 }: { avgCycle?: number }) => {
+const InsightsView = ({ user, cycleParams, loggedSymptoms }: { user: any; cycleParams: any; loggedSymptoms: string[] }) => {
+  const [forecast, setForecast] = useState<{ title: string; content: string; tags: string[] } | null>(null);
+  const [loadingForecast, setLoadingForecast] = useState(true);
   const [selectedInsightsSymptoms, setSelectedInsightsSymptoms] = useState<string[]>(['Cramps', 'Mood']);
+
+  useEffect(() => {
+    const fetchForecast = async () => {
+      try {
+        const lastDate = new Date(user.lastPeriodDate);
+        const today = new Date();
+        const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const currentPhase = PHASES.get(diffDays, cycleParams).label;
+
+        const response = await fetch('/api/insights', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user, cycleParams, loggedSymptoms, currentPhase })
+        });
+        const data = await response.json();
+        setForecast(data);
+      } catch (error) {
+        console.error("Forecast fetch failed:", error);
+      } finally {
+        setLoadingForecast(false);
+      }
+    };
+    fetchForecast();
+  }, [JSON.stringify(loggedSymptoms)]);
+  
+  const avgCycle = cycleParams.cycleLength;
   
   const symptomsList = [
     { id: 'Cramps', label: 'Cramps', color: '#8a486f' },
@@ -951,6 +1049,48 @@ const InsightsView = ({ avgCycle = 28 }: { avgCycle?: number }) => {
         <h2 className="text-3xl text-primary serif-italic">Your Insights</h2>
         <p className="text-on-surface-variant opacity-70">Discover the internal rhythms of your sanctuary.</p>
       </header>
+
+      <section className="space-y-4">
+        <h3 className="text-xl serif-italic">Celestial Forecast</h3>
+        <div className="glass-card p-8 rounded-[40px] bg-gradient-to-br from-primary/10 via-background to-secondary/10 border-primary/10 relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-6 opacity-20">
+            <Sparkles className="text-primary" size={48} />
+          </div>
+          
+          {loadingForecast ? (
+            <div className="flex flex-col items-center py-12 space-y-4">
+               <motion.div animate={{ rotate: 360 }} transition={{ duration: 10, repeat: Infinity, ease: "linear" }}>
+                 <Loader2 className="text-primary animate-spin" size={32} />
+               </motion.div>
+               <p className="text-xs font-bold uppercase tracking-[0.3em] text-primary/40">Aligning with the stars...</p>
+            </div>
+          ) : forecast ? (
+            <div className="space-y-6">
+               <div className="space-y-2">
+                 <div className="flex gap-2">
+                   {forecast.tags?.map(tag => (
+                     <span key={tag} className="text-[8px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                       {tag}
+                     </span>
+                   ))}
+                 </div>
+                 <h4 className="text-2xl text-primary serif-italic">{forecast.title}</h4>
+               </div>
+               <p className="text-sm italic opacity-70 leading-relaxed line-clamp-3">
+                 {forecast.content}
+               </p>
+               <button 
+                onClick={() => (window as any).setInsightModal(true)}
+                className="w-full py-4 rounded-2xl bg-primary/10 text-primary font-bold uppercase tracking-widest text-[10px] hover:bg-primary transition-all hover:text-white"
+               >
+                 View Full Initiation
+               </button>
+            </div>
+          ) : (
+            <p className="text-center py-12 opacity-40 italic">The stars are clouded today.</p>
+          )}
+        </div>
+      </section>
 
       <section className="space-y-4">
         <div className="flex justify-between items-baseline">
@@ -1748,7 +1888,7 @@ const CalendarView = ({ cycleParams }: { cycleParams: { cycleLength: number; per
 // --- ONBOARDING / SIGN UP ---
 
 const OnboardingView = ({ onComplete }: { onComplete: (userData: { name: string; email: string; avatar: string; cycleLength: number; periodLength: number; lutealLength: number; lastPeriodDate: string }) => void }) => {
-  const [step, setStep] = useState(1); // 1: Welcome, 2: Login/Sign-up choice, 3: Details (Signup), 4: Last Period, 5: Avatar (Signup), 6: Signin
+  const [step, setStep] = useState(1); // 1: Welcome, 2: Profile Name, 3: Last Period, 4: Avatar
   const [userData, setUserData] = useState({
     name: '',
     email: '',
@@ -1757,127 +1897,18 @@ const OnboardingView = ({ onComplete }: { onComplete: (userData: { name: string;
     periodLength: 5,
     lutealLength: 14,
     lastPeriodDate: '',
-    otp: ''
   });
 
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const totalSteps = 4;
+  const progress = (step / totalSteps) * 100;
 
-  const totalSteps = 5; // We treat 1-5 as main onboarding flow, 6 is alternate
-  const progress = Math.min(((step > 5 ? 5 : step) / totalSteps) * 100, 100);
-
-  const sendOtp = async () => {
-    setIsSendingOtp(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userData.email }),
+  const handleNext = () => {
+    if (step === 4) {
+      onComplete({ 
+        ...userData,
+        lastPeriodDate: userData.lastPeriodDate || new Date().toISOString().split('T')[0]
       });
-      const data = await response.json();
-      if (response.ok) {
-        setOtpSent(true);
-        if (data.demoOtp) {
-          console.log(`[DEMO] OTP for ${userData.email} is: ${data.demoOtp}`);
-          if (data.error === "GMAIL_LENGTH_FAIL") {
-             setError(`Error: App Password must be 16 chars (yours is invalid). Code: ${data.demoOtp}`);
-          } else if (data.error === "GMAIL_AUTH_FAIL") {
-            setError(`Ritual Backup: Gmail login refused. Your code is ${data.demoOtp}`);
-          } else {
-            // For general demo mode, show a softer toast/alert
-            const msg = `Success! (Demo Mode) The OTP is ${data.demoOtp}.`;
-            setError(msg); // Show it in the error area for better visibility without blocking
-          }
-        }
-      } else {
-        setError(data.error || 'Failed to send OTP.');
-      }
-    } catch (err) {
-      setError('Connection error. Is the server running?');
-    } finally {
-      setIsSendingOtp(false);
-    }
-  };
-
-  const verifyOtp = async () => {
-    setIsVerifyingOtp(true);
-    setError(null);
-    try {
-      const cleanOtp = userData.otp.replace(/\s/g, "");
-      const response = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userData.email, otp: cleanOtp }),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        if (data.token) {
-          localStorage.setItem('lumina_token', data.token);
-        }
-        
-        if (data.isNew === false) {
-           onComplete(data.user);
-           return;
-        }
-
-        if (step === 6) {
-          onComplete({ 
-            name: data.user?.name || 'Rejoined Soul',
-            email: userData.email,
-            avatar: data.user?.avatar || userData.avatar,
-            cycleLength: data.user?.cycleLength || userData.cycleLength,
-            periodLength: data.user?.periodLength || userData.periodLength,
-            lutealLength: data.user?.lutealLength || userData.lutealLength,
-            lastPeriodDate: data.user?.lastPeriodDate || userData.lastPeriodDate || new Date().toISOString().split('T')[0]
-          });
-        } else {
-          setStep(4);
-          setOtpSent(false); 
-        }
-      } else {
-        setError(data.error || 'Invalid code.');
-      }
-    } catch (err) {
-      setError('Verification failed. Please try again.');
-    } finally {
-      setIsVerifyingOtp(false);
-    }
-  };
-
-  const handleNext = async () => {
-    if (step === 5) {
-      const profileData = { 
-        name: userData.name || 'Lumina Soul', 
-        email: userData.email,
-        avatar: userData.avatar,
-        cycleLength: userData.cycleLength,
-        periodLength: userData.periodLength,
-        lutealLength: userData.lutealLength,
-        lastPeriodDate: userData.lastPeriodDate
-      };
-
-      const token = localStorage.getItem('lumina_token');
-      if (token) {
-        try {
-          await fetch('/api/auth/update-profile', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}` 
-            },
-            body: JSON.stringify(profileData),
-          });
-        } catch (err) {
-          console.error("Profile sync failed:", err);
-        }
-      }
-
-      onComplete(profileData);
-    }
-    else setStep(step + 1);
+    } else setStep(step + 1);
   };
 
   const sparkles = Array.from({ length: 12 });
@@ -1903,31 +1934,21 @@ const OnboardingView = ({ onComplete }: { onComplete: (userData: { name: string;
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-background flex flex-col items-center p-6 overflow-hidden">
+    <div className="fixed inset-0 z-[100] bg-[#a58f89] flex flex-col items-center p-6 overflow-hidden">
       {/* Background Atmosphere */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <motion.div 
-          animate={{ 
-            scale: [1, 1.1, 1],
-            rotate: [0, 5, 0],
-            opacity: [0.3, 0.5, 0.3]
-          }}
+          animate={{ scale: [1, 1.1, 1], rotate: [0, 5, 0], opacity: [0.3, 0.5, 0.3] }}
           transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
           className="absolute top-[-20%] right-[-10%] w-[80%] h-[80%] rounded-full bg-primary/20 blur-[140px]" 
         />
         <motion.div 
-          animate={{ 
-            scale: [1, 1.2, 1],
-            rotate: [0, -8, 0],
-            opacity: [0.2, 0.4, 0.2]
-          }}
+          animate={{ scale: [1, 1.2, 1], rotate: [0, -8, 0], opacity: [0.2, 0.4, 0.2] }}
           transition={{ duration: 25, repeat: Infinity, ease: "easeInOut", delay: 2 }}
           className="absolute bottom-[-20%] left-[-20%] w-[80%] h-[80%] rounded-full bg-secondary/15 blur-[140px]" 
         />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.05),transparent)]" />
       </div>
 
-      {/* Decorative Floating Elements */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {sparkles.map((_, i) => (
           <motion.div
@@ -1939,19 +1960,13 @@ const OnboardingView = ({ onComplete }: { onComplete: (userData: { name: string;
               x: [0, (Math.random() * 600 - 300)],
               y: [0, (Math.random() * 1000 - 500)],
             }}
-            transition={{ 
-              duration: 8 + Math.random() * 6, 
-              repeat: Infinity,
-              delay: i * 0.5 
-            }}
+            transition={{ duration: 8 + Math.random() * 6, repeat: Infinity, delay: i * 0.5 }}
             className="absolute left-1/2 top-1/2 text-primary/40"
           >
             <Sparkles size={12 + (i % 4) * 6} strokeWidth={0.5} />
           </motion.div>
         ))}
       </div>
-
-
 
       <main className="flex-1 flex flex-col items-center justify-center w-full max-w-md z-10">
         <AnimatePresence mode="wait">
@@ -1965,26 +1980,15 @@ const OnboardingView = ({ onComplete }: { onComplete: (userData: { name: string;
           >
             <motion.div variants={itemVariants} className="space-y-6">
               <motion.div 
-                animate={{ 
-                  y: [0, -12, 0],
-                  rotate: [0, 3, -3, 0],
-                  scale: [1, 1.02, 1]
-                }}
+                animate={{ y: [0, -12, 0], rotate: [0, 3, -3, 0], scale: [1, 1.02, 1] }}
                 transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
                 className="relative inline-block"
               >
                 <div className="w-28 h-28 bg-white/5 backdrop-blur-xl rounded-[40px] mx-auto flex items-center justify-center p-5 border border-primary/10 shadow-2xl overflow-hidden group">
-                  {step === 5 ? (
+                  {step === 4 ? (
                     <div className="relative w-full h-full">
-                       <SanctuaryImage 
-                        src={userData.avatar} 
-                        alt="Avatar Preview" 
-                        className="w-full h-full rounded-3xl object-cover transition-transform duration-700 group-hover:scale-110" 
-                      />
-                      <motion.div 
-                        layoutId="avatar-glow"
-                        className="absolute inset-0 bg-primary/20 blur-xl scale-75 -z-10"
-                      />
+                       <SanctuaryImage src={userData.avatar} alt="Avatar Preview" className="w-full h-full rounded-3xl object-cover" />
+                       <motion.div layoutId="avatar-glow" className="absolute inset-0 bg-primary/20 blur-xl scale-75 -z-10" />
                     </div>
                   ) : (
                     <div className="relative">
@@ -1999,35 +2003,20 @@ const OnboardingView = ({ onComplete }: { onComplete: (userData: { name: string;
                     </div>
                   )}
                 </div>
-                {/* Immersive Orbitals */}
-                <motion.div 
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-0 -m-8 border border-dashed border-primary/10 rounded-full opacity-30"
-                />
-                <motion.div 
-                  animate={{ rotate: -360 }}
-                  transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-0 -m-10 border border-dotted border-primary/5 rounded-full opacity-20"
-                />
               </motion.div>
               
               <div className="space-y-3">
                 <h1 className="text-4xl text-primary serif-italic leading-tight tracking-tight">
-                  {step === 1 && "The Sanctuary Awaits"}
-                  {step === 2 && "Choose Your Path"}
-                  {step === 3 && (userData.name ? `Greetings, ${userData.name}` : "Identify Your Entity")}
-                  {step === 4 && (userData.name ? `${userData.name}, Sacred Rhythm` : "The Biological Blueprint")}
-                  {step === 5 && "Your Digital Vessel"}
-                  {step === 6 && "Welcome Home, Soul"}
+                  {step === 1 && "Start Your Journey"}
+                  {step === 2 && (userData.name ? `Greetings, ${userData.name}` : "Identify Your Entity")}
+                  {step === 3 && (userData.name ? `${userData.name}, Sacred Rhythm` : "The Biological Blueprint")}
+                  {step === 4 && "Your Digital Vessel"}
                 </h1>
                 <p className="text-on-surface-variant/60 leading-relaxed font-sans text-sm max-w-[300px] mx-auto italic">
                   {step === 1 && "Enter a mindful space dedicated to your cycle, your health, and your spirit."}
-                  {step === 2 && "Every journey is personal. How shall we begin documenting yours today?"}
-                  {step === 3 && "Verification is the first ritual of entry. Let's secure your sanctuary's gate."}
-                  {step === 4 && "By sharing your last menstruation date, Lumina can align with your internal tides."}
-                  {step === 5 && "Select an avatar that resonates with your current energetic frequency."}
-                  {step === 6 && "Step back into the flow. Your data has been waiting for your return."}
+                  {step === 2 && "Share your identity with the sanctuary to personalize your experience."}
+                  {step === 3 && "By sharing your last menstruation date, Lumina can align with your internal tides."}
+                  {step === 4 && "Select an avatar that resonates with your current energetic frequency."}
                 </p>
               </div>
             </motion.div>
@@ -2040,321 +2029,71 @@ const OnboardingView = ({ onComplete }: { onComplete: (userData: { name: string;
                     className="group relative w-full h-16 rounded-full bg-primary text-white font-bold uppercase tracking-[0.3em] text-xs shadow-2xl shadow-primary/30 overflow-hidden transition-all hover:scale-[1.02] active:scale-95"
                   >
                     <span className="relative z-10">Step Into Lumina</span>
-                    <motion.div 
-                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                      initial={{ left: '-100%' }}
-                      whileHover={{ left: '100%' }}
-                      transition={{ duration: 0.8, ease: "easeInOut" }}
-                    />
                   </button>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold tracking-[0.3em] text-primary/40 uppercase">A Sacred Member?</p>
-                    <button onClick={() => setStep(6)} className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary hover:tracking-[0.3em] transition-all border-b border-primary/20 pb-0.5">Sign In To Sanctuary</button>
-                  </div>
                 </div>
               )}
 
               {step === 2 && (
-                <div className="grid grid-cols-1 gap-5">
-                  <button 
-                    onClick={() => setStep(3)}
-                    className="group relative w-full p-6 rounded-[2rem] bg-white border border-primary/10 shadow-xl text-left transition-all hover:border-primary/40 hover:shadow-primary/5 active:scale-98"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <span className="block text-[9px] font-bold tracking-[0.2em] text-primary/60 uppercase">New Journey</span>
-                        <h3 className="text-xl serif-italic text-primary">Begin Initiation</h3>
-                      </div>
-                      <div className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                        <ChevronRight size={20} />
-                      </div>
-                    </div>
-                  </button>
-
-                  <button 
-                    onClick={() => setStep(6)}
-                    className="group relative w-full p-6 rounded-[2rem] glass-card border border-primary/5 text-left transition-all hover:bg-primary/5 active:scale-98"
-                  >
-                     <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <span className="block text-[9px] font-bold tracking-[0.2em] text-primary/40 uppercase">Returning Soul</span>
-                        <h3 className="text-xl serif-italic opacity-80">Re-enter Sanctuary</h3>
-                      </div>
-                      <div className="w-10 h-10 rounded-full bg-primary/5 flex items-center justify-center opacity-40 group-hover:opacity-100 transition-opacity">
-                        <ChevronRight size={20} />
-                      </div>
-                    </div>
-                  </button>
-                  
-                  <button onClick={() => setStep(1)} className="text-[10px] font-bold tracking-widest text-primary/30 uppercase mt-4 hover:text-primary transition-colors">Return to Entrance</button>
+                <div className="space-y-8">
+                  <form onSubmit={(e) => { e.preventDefault(); handleNext(); }} className="space-y-6">
+                    <input 
+                      type="text" placeholder="Your Name" value={userData.name}
+                      onChange={e => setUserData({...userData, name: e.target.value})}
+                      className="w-full px-8 py-6 rounded-[2.5rem] bg-white/50 backdrop-blur-md border border-primary/10 outline-none focus:border-primary text-center text-xl font-serif italic shadow-sm"
+                      required
+                    />
+                    <button type="submit" className="w-full h-16 rounded-full bg-primary text-white font-bold uppercase tracking-[0.3em] shadow-2xl shadow-primary/30 transition-transform hover:scale-[1.02] active:scale-95">
+                      Continue Initiation
+                    </button>
+                  </form>
                 </div>
               )}
 
               {step === 3 && (
-                <div className="space-y-8">
-                  {!otpSent ? (
-                    <form 
-                      onSubmit={(e) => { e.preventDefault(); sendOtp(); }}
-                      className="space-y-6"
-                    >
-                      <div className="space-y-4">
-                        <div className="relative">
-                          <input 
-                            type="text" 
-                            placeholder="Divine Name" 
-                            value={userData.name}
-                            onChange={e => setUserData({...userData, name: e.target.value})}
-                            className="w-full px-8 py-6 rounded-[2.5rem] bg-white/50 backdrop-blur-md border border-primary/10 outline-none focus:border-primary/40 focus:bg-white text-center text-xl placeholder:text-primary/10 transition-all font-serif italic shadow-sm"
-                            required
-                          />
-                        </div>
-                        <div className="relative">
-                          <input 
-                            type="email" 
-                            placeholder="Gmail Essence" 
-                            value={userData.email}
-                            onChange={e => setUserData({...userData, email: e.target.value})}
-                            className="w-full px-8 py-6 rounded-[2.5rem] bg-white/50 backdrop-blur-md border border-primary/10 outline-none focus:border-primary/40 focus:bg-white text-center text-xl placeholder:text-primary/10 transition-all font-serif italic shadow-sm"
-                            required
-                          />
-                        </div>
-                      </div>
-                      <button 
-                        type="submit"
-                        disabled={isSendingOtp}
-                        className="w-full h-16 rounded-full bg-primary text-white font-bold uppercase tracking-[0.3em] shadow-2xl shadow-primary/30 flex items-center justify-center gap-3 transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50"
-                      >
-                        {isSendingOtp ? <Loader2 className="animate-spin" size={20} /> : "Transmit Sacred Key"}
-                      </button>
-                    </form>
-                  ) : (
-                    <form 
-                      onSubmit={(e) => { e.preventDefault(); verifyOtp(); }}
-                      className="space-y-8"
-                    >
-                      <div className="space-y-4">
-                        <p className="text-[10px] uppercase font-bold tracking-[0.2em] opacity-40">Entry key materialized at:</p>
-                        <p className="text-sm text-primary font-serif italic">{userData.email}</p>
-                      </div>
-                      <input 
-                        type="text" 
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        autoComplete="one-time-code"
-                        placeholder="000000" 
-                        maxLength={6}
-                        value={userData.otp}
-                        onChange={e => setUserData({...userData, otp: e.target.value})}
-                        className="w-full px-8 py-8 rounded-[3rem] bg-white border border-primary/20 outline-none focus:border-primary text-center text-5xl tracking-[0.4em] placeholder:text-primary/5 transition-all font-serif italic shadow-xl"
-                        required
-                      />
-                      <button 
-                        type="submit"
-                        disabled={isVerifyingOtp}
-                        className="w-full h-16 rounded-full bg-secondary text-white font-bold uppercase tracking-[0.3em] shadow-2xl shadow-secondary/30 flex items-center justify-center gap-3 transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50"
-                      >
-                        {isVerifyingOtp ? <Loader2 className="animate-spin" size={20} /> : "Unlock Your Sanctum"}
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={() => setOtpSent(false)}
-                        className="text-[10px] font-bold uppercase tracking-[0.4em] text-primary/40 hover:text-primary transition-colors"
-                      >
-                        Correction Needed
-                      </button>
-                    </form>
-                  )}
-                  
-                  {error && (
-                    <motion.div 
-                      layout
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className={`p-6 rounded-[2rem] border ${error.includes('Backup') ? 'bg-secondary/10 border-secondary/20 shadow-lg shadow-secondary/5' : 'bg-period/5 border-period/10'} backdrop-blur-sm`}
-                    >
-                      {error.includes('Backup') && (
-                        <div className="flex items-center gap-3 mb-2 text-secondary justify-center">
-                           <Sparkles size={16} />
-                           <span className="text-[9px] font-bold uppercase tracking-[0.3em]">Sanctuary Guardian</span>
-                           <Sparkles size={16} />
-                        </div>
-                      )}
-                      <p className={`text-center leading-relaxed font-serif italic ${error.includes('Backup') ? 'text-secondary text-sm' : 'text-period text-[10px] uppercase font-bold tracking-widest'}`}>
-                        {error}
-                      </p>
-                    </motion.div>
-                  )}
-                </div>
-              )}
-
-              {step === 4 && (
                 <div className="space-y-10">
                   <div className="space-y-6">
                     <div className="relative group p-4 bg-white/40 backdrop-blur-xl rounded-[3rem] border border-primary/5 shadow-inner transition-all hover:bg-white/60">
-                      <div className="absolute top-1/2 left-8 -translate-y-1/2 text-primary/40 group-focus-within:text-primary transition-colors">
-                        <Droplets size={24} />
-                      </div>
                       <input 
-                        type="date"
-                        value={userData.lastPeriodDate}
+                        type="date" value={userData.lastPeriodDate}
                         onChange={e => setUserData({...userData, lastPeriodDate: e.target.value})}
                         className="w-full px-12 py-6 bg-transparent outline-none text-center text-xl transition-all font-serif italic cursor-pointer appearance-none"
                         required
                       />
-                      {!userData.lastPeriodDate && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-primary/10 font-serif italic text-xl">
-                          Select The First Day
-                        </div>
-                      )}
                     </div>
-                    
-                    <div className="p-6 rounded-[2.5rem] bg-primary/5 border border-primary/10 flex flex-col items-center gap-3">
-                       <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-primary shadow-sm">
-                          <motion.div animate={{ rotate: 360 }} transition={{ duration: 10, repeat: Infinity, ease: "linear" }}>
-                            <Sparkles size={24} />
-                          </motion.div>
-                       </div>
-                       <p className="text-[11px] text-center leading-tight text-primary/60 font-serif italic px-4">
+                    <div className="p-6 rounded-[2.5rem] bg-primary/5 border border-primary/10">
+                       <p className="text-[11px] text-center text-primary/60 font-serif italic">
                         "Your biological clock is a sacred mechanism. Even a soft approximation allows Lumina to begin its alignment with your internal tides."
                        </p>
                     </div>
                   </div>
-                  
                   <button 
-                    onClick={handleNext}
-                    disabled={!userData.lastPeriodDate}
-                    className="w-full h-16 rounded-full bg-primary text-white font-bold uppercase tracking-[0.3em] shadow-2xl shadow-primary/30 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:grayscale"
+                    onClick={handleNext} disabled={!userData.lastPeriodDate}
+                    className="w-full h-16 rounded-full bg-primary text-white font-bold uppercase tracking-[0.3em] shadow-2xl shadow-primary/30 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30"
                   >
                     Sync Rhythm
                   </button>
                 </div>
               )}
 
-              {step === 5 && (
+              {step === 4 && (
                 <div className="space-y-8">
-                  <div className="grid grid-cols-4 gap-4 max-h-[360px] overflow-y-auto px-2 py-2 hide-scrollbar">
+                  <div 
+                    className="grid grid-cols-4 gap-4 overflow-y-auto px-2 py-2 hide-scrollbar mx-auto"
+                    style={{ fontSize: '14px', lineHeight: '22px', marginBottom: '20px', height: '272.2px', width: '293.2px' }}
+                  >
                     {avatars.map((av, idx) => (
                       <motion.button 
-                        key={idx}
-                        whileHover={{ scale: 1.05, rotate: idx % 2 === 0 ? 2 : -2 }}
-                        whileTap={{ scale: 0.95 }}
+                        key={idx} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                         onClick={() => setUserData({...userData, avatar: av})}
-                        className={`relative aspect-square rounded-2xl overflow-hidden transition-all p-1 ${userData.avatar === av ? 'ring-2 ring-primary shadow-lg shadow-primary/20 scale-105 z-10' : 'opacity-40 grayscale hover:grayscale-0 hover:opacity-100'}`}
+                        className={`relative aspect-square rounded-2xl overflow-hidden transition-all ${userData.avatar === av ? 'ring-2 ring-primary shadow-lg scale-105 z-10' : 'opacity-40 grayscale hover:grayscale-0 hover:opacity-100'}`}
                       >
-                        <SanctuaryImage 
-                          src={av} 
-                          alt={`Avatar ${idx}`} 
-                          className="w-full h-full rounded-xl object-cover bg-white/20 backdrop-blur-md" 
-                        />
-                        {userData.avatar === av && (
-                           <motion.div 
-                            layoutId="check-glow"
-                            className="absolute inset-0 bg-primary/10 z-10 pointer-events-none"
-                           />
-                        )}
+                        <SanctuaryImage src={av} alt={`Avatar ${idx}`} className="w-full h-full object-cover" />
                       </motion.button>
                     ))}
                   </div>
-                  <button 
-                    onClick={handleNext}
-                    className="w-full h-16 rounded-full bg-primary text-white font-bold uppercase tracking-[0.3em] shadow-2xl shadow-primary/30 transition-all hover:scale-[1.02] active:scale-95"
-                  >
+                  <button onClick={handleNext} className="w-full h-16 rounded-full bg-primary text-white font-bold uppercase tracking-[0.3em] shadow-2xl shadow-primary/30 transition-all hover:scale-[1.02] active:scale-95">
                     Enter Sanctuary
                   </button>
-                </div>
-              )}
-
-              {step === 6 && (
-                <div className="space-y-8">
-                   {!otpSent ? (
-                    <form 
-                      onSubmit={(e) => { e.preventDefault(); sendOtp(); }}
-                      className="space-y-6"
-                    >
-                      <div className="space-y-4">
-                        <div className="relative">
-                           <input 
-                            type="email" 
-                            placeholder="Essence Address" 
-                            value={userData.email}
-                            onChange={e => setUserData({...userData, email: e.target.value})}
-                            className="w-full px-8 py-6 rounded-[2.5rem] bg-white/50 backdrop-blur-md border border-primary/10 outline-none focus:border-primary text-center text-xl placeholder:text-primary/10 transition-all font-serif italic shadow-sm"
-                            required
-                          />
-                        </div>
-                      </div>
-                      <button 
-                        type="submit"
-                        disabled={isSendingOtp}
-                        className="w-full h-16 rounded-full bg-primary text-white font-bold uppercase tracking-[0.3em] shadow-2xl shadow-primary/30 flex items-center justify-center gap-3 transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50"
-                      >
-                        {isSendingOtp ? <Loader2 className="animate-spin" size={20} /> : "Request Entry Key"}
-                      </button>
-                      <button 
-                         type="button"
-                         onClick={() => { setStep(2); setError(null); }} 
-                         className="text-[10px] uppercase tracking-[0.4em] text-primary/40 font-bold block mx-auto hover:text-primary transition-colors border-b border-primary/10 pb-0.5"
-                      >
-                        Seek Initiation
-                      </button>
-                    </form>
-                  ) : (
-                    <form 
-                      onSubmit={(e) => { e.preventDefault(); verifyOtp(); }}
-                      className="space-y-8"
-                    >
-                      <div className="space-y-4">
-                        <p className="text-[10px] uppercase font-bold tracking-[0.2em] opacity-40">Whisper the entry key sent to:</p>
-                        <p className="text-sm text-primary font-serif italic">{userData.email}</p>
-                      </div>
-                      <input 
-                        type="text" 
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        autoComplete="one-time-code"
-                        placeholder="000000" 
-                        maxLength={6}
-                        value={userData.otp}
-                        onChange={e => setUserData({...userData, otp: e.target.value})}
-                        className="w-full px-8 py-8 rounded-[3rem] bg-white border border-primary/20 outline-none focus:border-primary text-center text-5xl tracking-[0.4em] placeholder:text-primary/5 transition-all font-serif italic shadow-xl"
-                        required
-                      />
-                      <button 
-                        type="submit"
-                        disabled={isVerifyingOtp}
-                        className="w-full h-16 rounded-full bg-secondary text-white font-bold uppercase tracking-[0.3em] shadow-2xl shadow-secondary/30 flex items-center justify-center gap-3 transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50"
-                      >
-                        {isVerifyingOtp ? <Loader2 className="animate-spin" size={20} /> : "Enter My Sanctuary"}
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={() => setOtpSent(false)}
-                        className="text-[10px] font-bold uppercase tracking-[0.4em] text-primary/40 hover:text-primary transition-colors"
-                      >
-                        Different Essence?
-                      </button>
-                    </form>
-                  )}
-                  
-                  {error && (
-                    <motion.div 
-                      layout
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className={`p-6 rounded-[2rem] border ${error.includes('Backup') ? 'bg-secondary/10 border-secondary/20 shadow-lg shadow-secondary/5' : 'bg-period/5 border-period/10'} backdrop-blur-sm`}
-                    >
-                      {error.includes('Backup') && (
-                        <div className="flex items-center gap-3 mb-2 text-secondary justify-center">
-                           <Sparkles size={16} />
-                           <span className="text-[9px] font-bold uppercase tracking-[0.3em]">Sanctuary Guardian</span>
-                           <Sparkles size={16} />
-                        </div>
-                      )}
-                      <p className={`text-center leading-relaxed font-serif italic ${error.includes('Backup') ? 'text-secondary text-sm' : 'text-period text-[10px] uppercase font-bold tracking-widest'}`}>
-                        {error}
-                      </p>
-                    </motion.div>
-                  )}
                 </div>
               )}
             </motion.div>
@@ -2362,33 +2101,9 @@ const OnboardingView = ({ onComplete }: { onComplete: (userData: { name: string;
         </AnimatePresence>
       </main>
 
-      <footer className="w-full p-8 flex flex-col items-center gap-6 z-10 mt-auto">
-        <div className="flex flex-col items-center gap-5 w-full max-w-lg mx-auto">
-          <div className="flex items-center gap-4 opacity-20 hover:opacity-40 transition-opacity group">
-            <div className="h-[1px] w-8 sm:w-16 bg-primary/30 group-hover:w-12 sm:group-hover:w-20 transition-all duration-700" />
-            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.5em] sm:tracking-[1em] text-primary whitespace-nowrap">
-              Sanctuary of Lumina
-            </span>
-            <div className="h-[1px] w-8 sm:w-16 bg-primary/30 group-hover:w-12 sm:group-hover:w-20 transition-all duration-700" />
-          </div>
-          
-          <div className="flex flex-col sm:flex-row items-center gap-x-6 gap-y-3 px-4 sm:px-0">
-            <div className="flex items-center gap-6">
-              <button className="text-[8px] uppercase tracking-[0.2em] font-bold text-primary/30 hover:text-primary transition-colors cursor-pointer outline-none">
-                Privacy
-              </button>
-              <div className="w-1 h-1 rounded-full bg-primary/5" />
-              <button className="text-[8px] uppercase tracking-[0.2em] font-bold text-primary/30 hover:text-primary transition-colors cursor-pointer outline-none">
-                Terms
-              </button>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:block h-1 w-1 rounded-full bg-primary/10" />
-              <span className="text-[8px] uppercase tracking-[0.2em] font-bold text-primary/20 pointer-events-none whitespace-nowrap">
-                &copy; 2026 Sanctuary of Lumina
-              </span>
-            </div>
-          </div>
+      <footer className="w-full p-8 flex flex-col items-center z-10 mt-auto">
+        <div className="flex items-center gap-4 opacity-20">
+          <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary whitespace-nowrap">Sanctuary of Lumina</span>
         </div>
       </footer>
     </div>

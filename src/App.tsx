@@ -25,14 +25,21 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function App() {
   const [activeTab, setActiveTab] = useState('cycle');
   const [isDark, setIsDark] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(true);
-  const [isAuthenticating, setIsAuthenticating] = useState(true);
-  const [user, setUser] = useState<{name: string; email: string; avatar: string; healthSync?: any}>({ name: 'Girlie', email: '', avatar: '' });
-  const [cycleParams, setCycleParams] = useState({
-    cycleLength: 28,
-    periodLength: 5,
-    lutealLength: 14,
-    lastPeriodDate: '2026-04-08'
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return !localStorage.getItem('lumina_onboarding_complete');
+  });
+  const [user, setUser] = useState<{name: string; email: string; avatar: string; healthSync?: any}>(() => {
+    const saved = localStorage.getItem('lumina_user');
+    return saved ? JSON.parse(saved) : { name: 'Soul', email: '', avatar: '' };
+  });
+  const [cycleParams, setCycleParams] = useState(() => {
+    const saved = localStorage.getItem('lumina_cycle_params');
+    return saved ? JSON.parse(saved) : {
+      cycleLength: 28,
+      periodLength: 5,
+      lutealLength: 14,
+      lastPeriodDate: '2026-04-08'
+    };
   });
   const [loggedSymptoms, setLoggedSymptoms] = useState<string[]>(['Bloating']);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -49,38 +56,9 @@ export default function App() {
     (window as any).setInsightModal = setShowInsight;
     (window as any).setHistoryModal = setShowHistory;
     
-    // Session Restoration
+    // Session Restoration - REMOVED GMAIL AUTH
     const restoreSession = async () => {
-      const token = localStorage.getItem('lumina_token');
-      if (token) {
-        try {
-          const response = await fetch('/api/auth/me', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            setUser({ 
-              name: data.user.name || 'Returning Soul', 
-              email: data.user.email, 
-              avatar: data.user.avatar || '' 
-            });
-            if (data.user.cycleLength) {
-              setCycleParams({
-                cycleLength: data.user.cycleLength,
-                periodLength: data.user.periodLength,
-                lutealLength: data.user.lutealLength,
-                lastPeriodDate: data.user.lastPeriodDate
-              });
-            }
-            setShowOnboarding(false);
-          } else {
-            localStorage.removeItem('lumina_token');
-          }
-        } catch (err) {
-          console.error("Session restoration failed:", err);
-        }
-      }
-      setIsAuthenticating(false);
+      // Logic handled via localStorage in initializers
     };
 
     restoreSession();
@@ -99,7 +77,7 @@ export default function App() {
 
   useEffect(() => {
     // Only attempt to show the greeting if onboarding is finished and authentication is complete
-    if (!showOnboarding && !isAuthenticating) {
+    if (!showOnboarding) {
        const today = new Date().toDateString();
        const hasSeenGreetingToday = localStorage.getItem('lastGreetingDate') === today;
        
@@ -112,7 +90,7 @@ export default function App() {
          }
        }
     }
-  }, [showOnboarding, isAuthenticating, activeTab]);
+  }, [showOnboarding, activeTab]);
 
   const handleDismissGreeting = () => {
     setShowGreeting(false);
@@ -151,29 +129,23 @@ export default function App() {
   const activeColor = isDark ? '#c5c5d2' : '#8a486f';
 
   const handleOnboardingComplete = (userData: { name: string; email?: string; avatar: string; cycleLength: number; periodLength: number; lutealLength: number; lastPeriodDate: string }) => {
-    setUser({ name: userData.name, email: userData.email || '', avatar: userData.avatar });
-    setCycleParams({
+    const newUser = { name: userData.name, email: userData.email || '', avatar: userData.avatar };
+    const newParams = {
       cycleLength: userData.cycleLength,
       periodLength: userData.periodLength,
       lutealLength: userData.lutealLength,
       lastPeriodDate: userData.lastPeriodDate
-    });
+    };
+    
+    setUser(newUser);
+    setCycleParams(newParams);
+    
+    localStorage.setItem('lumina_user', JSON.stringify(newUser));
+    localStorage.setItem('lumina_cycle_params', JSON.stringify(newParams));
+    localStorage.setItem('lumina_onboarding_complete', 'true');
+    
     setShowOnboarding(false);
   };
-
-  if (isAuthenticating) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <motion.div 
-          animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="text-primary font-serif italic text-2xl"
-        >
-          Lumina Sanctum...
-        </motion.div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen pb-32">
@@ -204,7 +176,14 @@ export default function App() {
           />
         )}
         {showNotifications && <NotificationCenter onClose={() => setShowNotifications(false)} />}
-        {showInsight && <InsightModal onClose={() => setShowInsight(false)} />}
+        {showInsight && (
+          <InsightModal 
+            onClose={() => setShowInsight(false)} 
+            user={user}
+            cycleParams={cycleParams}
+            loggedSymptoms={loggedSymptoms}
+          />
+        )}
         {showHistory && <HistoryModal onClose={() => setShowHistory(false)} cycleParams={cycleParams} />}
         {showGreeting && activeTab === 'cycle' && (
           <MorningGreeting userName={user.name} onClose={handleDismissGreeting} />
@@ -245,7 +224,11 @@ export default function App() {
               )}
               {activeTab === 'insights' && (
                 <motion.div key="insights" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                  <InsightsView avgCycle={cycleParams.cycleLength} />
+                  <InsightsView 
+                    user={user}
+                    cycleParams={cycleParams}
+                    loggedSymptoms={loggedSymptoms}
+                  />
                 </motion.div>
               )}
               {activeTab === 'discover' && (

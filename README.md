@@ -129,11 +129,6 @@ Software Engineer
 ---
 
 ## ⭐ Show some love
-
-
-web application/stitch/projects/391713979013229564/screens/a234285a3f76402d86e8935ff4abba76
-web application/stitch/projects/391713979013229564/screens/b0ed805127ca4bc2bf9f65fe3aefb95d
-web application/stitch/projects/391713979013229564/screens/b0ed805127ca4bc2bf9f65fe3aefb95d
-web application/stitch/projects/391713979013229564/screens/5724bcd790904c9abcf9353ab1a8fe23
+web application/stitch/projects/391713979013229564/screens/a868bdea0ecc4b7d90b3f9bc2b91a0d3
 
 If you like this project, consider giving it a ⭐ on GitHub!

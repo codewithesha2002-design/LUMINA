@@ -130,5 +130,4 @@ Software Engineer
 
 ## ⭐ Show some love
 web application/stitch/projects/391713979013229564/screens/a868bdea0ecc4b7d90b3f9bc2b91a0d3
-
 If you like this project, consider giving it a ⭐ on GitHub!
